@@ -50,7 +50,7 @@ metric='slurm.partition_usage'
 # debug               2/1/1/4
 # $
 
-sinfo_data=$(timeout ${slurm_timeout} sinfo -O partitionname,nodeaiot)	# call sinfo and collect data
+sinfo_data=$(timeout ${slurm_timeout} sinfo -O partitionname:40,nodeaiot)	# call sinfo and collect data
 
 export seconds=$(date +%s) #current unix time
 
