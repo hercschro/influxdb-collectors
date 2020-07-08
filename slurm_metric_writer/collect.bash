@@ -13,7 +13,7 @@ export slurm_timeout=5
 # curl timeout
 curl_timeout=5
 
-
+SLURM_PATH=/opt/slurm/bin
 
 DEBUG=1
 
@@ -50,7 +50,7 @@ metric='slurm.partition_usage'
 # debug               2/1/1/4
 # $
 
-sinfo_data=$(timeout ${slurm_timeout} sinfo -O partitionname:40,nodeaiot)	# call sinfo and collect data
+sinfo_data=$(timeout ${slurm_timeout} $SLURM_PATH/sinfo -O partitionname:40,nodeaiot)	# call sinfo and collect data
 
 export seconds=$(date +%s) #current unix time
 
@@ -64,33 +64,41 @@ for partition in ${partition_list}; do
   value=$(echo "$partition_data" | cut -d '/' -f 3 | xargs) && curl_wrapper_1 ${value} $partition 'other' $metric
   value=$(echo "$partition_data" | cut -d '/' -f 4 | xargs) && curl_wrapper_1 ${value} $partition 'total' $metric
 
+  # Push per-partition job info
+  value=$($SLURM_PATH/squeue -t r -p $partition --noheader|wc -l) && curl_wrapper_1 ${value} $partition 'jobs_running' $metric
+  value=$($SLURM_PATH/squeue -t configuring -p $partition --noheader|wc -l) && curl_wrapper_1 ${value} $partition 'jobs_configuring' $metric
+  value=$($SLURM_PATH/squeue -t completing -p $partition --noheader|wc -l) && curl_wrapper_1 ${value} $partition 'jobs_completing' $metric
+  value=$($SLURM_PATH/squeue -t pending -p $partition --noheader|wc -l) && curl_wrapper_1 ${value} $partition 'jobs_pending' $metric
+
 done
 
 # ************************
 metric='slurm.queue_stats'
 # ************************
+echo "Doing slurm.queue.stats"
 
 seconds=$(date +%s) #just for case of significant before
 
-running_jobs=$(timeout ${slurm_timeout} squeue -t R --noheader | wc -l) && seconds=$(date +%s) \
+running_jobs=$(timeout ${slurm_timeout} $SLURM_PATH/squeue -t R --noheader | wc -l) && seconds=$(date +%s) \
   && timeout ${curl_timeout} curl -i -u $username:$password -XPOST "$db_endpoint/write?db=$database&precision=s" --data-binary "${metric},metric=running value=${running_jobs} $seconds" &> /dev/null
-waiting_jobs=$(timeout ${slurm_timeout} squeue -t PD --noheader | wc -l) && seconds=$(date +%s) \
+waiting_jobs=$(timeout ${slurm_timeout} $SLURM_PATH/squeue -t PD --noheader | wc -l) && seconds=$(date +%s) \
   && timeout ${curl_timeout} curl -i -u $username:$password -XPOST "$db_endpoint/write?db=$database&precision=s" --data-binary "${metric},metric=waiting value=${waiting_jobs} $seconds" &> /dev/null
 
 # **************************
 metric='slurm.node_stats'
 # **************************
+echo "Doing slurm.node.stats"
 
 seconds=$(date +%s) #just for case of significant before
 
-drained_nodes=$(timeout ${slurm_timeout} sinfo -R --noheader| wc -l) \
+drained_nodes=$(timeout ${slurm_timeout} $SLURM_PATH/sinfo -R --noheader| wc -l) \
   && timeout ${curl_timeout} curl -i -u $username:$password -XPOST "$db_endpoint/write?db=$database&precision=s" --data-binary "${metric},metric=drained value=${drained_nodes} $seconds" &> /dev/null
 
 # **************************
 metric='slurm.node_status'
 # **************************
 
-scontrol_o_raw=$(scontrol show nodes -o)
+scontrol_o_raw=$($SLURM_PATH/scontrol show nodes -o)
 nodelist=$(echo "$scontrol_o_raw" | awk '{print $1}' | cut -d '=' -f 2 | xargs)
 
 for node in ${nodelist}; do
