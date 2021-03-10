@@ -21,16 +21,16 @@ DEBUG=1
 
 
 function curl_wrapper_1 () {
-  value=$1
-  tag_partition=$2
-  tag_metric=$3
-  metric=$4
+  local val=$1
+  local tag_partition=$2
+  local tag_metric=$3
+  local metr=$4
   
-  timeout ${curl_timeout} curl -i -u $username:$password -XPOST "$db_endpoint/write?db=$database&precision=s" --data-binary "${metric},partition=${partition},metric=${tag_metric} value=${value} $seconds" &> /dev/null
+  timeout ${curl_timeout} curl -i -u $username:$password -XPOST "$db_endpoint/write?db=$database&precision=s" --data-binary "${metr},partition=${tag_partition},metric=${tag_metric} value=${val} $seconds" &> /dev/null
 
   if [ -n "$DEBUG" ]; then
     echo "xpost: $db_endpoint/write?db=$database&precision=s"
-    echo "data-binary: ${metric},partition=${partition},metric=${tag_metric} value=${value} $seconds"
+    echo "data-binary: ${metr},partition=${tag_partition},metric=${tag_metric} value=${val} $seconds"
   fi
 
 }
@@ -57,7 +57,7 @@ export seconds=$(date +%s) #current unix time
 partition_list=$(echo "$sinfo_data" | awk '{print $1}' | tail -n +2 | xargs)	# extract partition list
 
 for partition in ${partition_list}; do
-  partition_data=$(echo "$sinfo_data" | grep $partition | xargs)
+  partition_data=$(echo "$sinfo_data" | grep "^$partition " | xargs)
 
   value=$(echo "$partition_data" | cut -d ' ' -f 2 | cut -d '/' -f 1 | xargs) && curl_wrapper_1 ${value} $partition 'allocated' $metric
   value=$(echo "$partition_data" | cut -d '/' -f 2 | xargs) && curl_wrapper_1 ${value} $partition 'idle' $metric
